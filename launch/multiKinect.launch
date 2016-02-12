@@ -1,0 +1,24 @@
+<launch>
+  <!-- Multi kinect arguments-->
+  <arg name="tfNames"          default="ar1_0,ar2_0" />
+  <arg name="pcl_in"           default="/kinect1/qhd/points,/kinect2/qhd/points" />
+  <arg name="tf_only"          default="true"/>
+  <arg name="data_folder"      default="$(find multi_kinect_merge)/launch/"/>
+  <arg name="mode"             default="1"/>
+  <arg name="debug"            default="false" />
+  
+  <node pkg="multi_kinect_merge" type="multi_kinect_merge" name="multi_kinect_merge">  
+    <!-- multi_kinect_merge common Node arg pass -->
+    <param name="mode"         type="int" value="$(arg mode)" />
+    <param name="pcl_in"       type="str" value="$(arg pcl_in)"/>
+    <param name="data_folder"  type="str" value="$(arg data_folder)"/>
+
+    <!-- multi_kinect_merge merge pcl arg pass-->
+    <rosparam command="load"   file="$(find multi_kinect_merge)/launch/kinect2kinectTransform.yaml" />
+    <param name="debug"        type="bool" value="$(arg debug)"/>
+
+    <!-- multi_kinect_merge calibrate arg pass-->
+    <param name="tfNames"      type="str" value="$(arg tfNames)" />
+    <param name="tf_only"      type="bool" value="$(arg tf_only)"/>
+    </node>
+</launch>

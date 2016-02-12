@@ -1,0 +1,2 @@
+transform0: {destination_frame: kinect2_rgb_optical_frame, quaternion: '-0.015518,0.0286024,0.00452596,0.99946',
+  source_frame: kinect1_rgb_optical_frame, translation: '-0.36968,-0.0258913,-0.0253169'}
