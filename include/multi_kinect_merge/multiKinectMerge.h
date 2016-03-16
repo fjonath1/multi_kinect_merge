@@ -30,13 +30,12 @@ class multiKinectMerge
         ros::Publisher pc_pub;
         std::string kinect1_header_frameID;
         bool okStatus, debug;
-        std::vector<bool> pclReady;
-        unsigned int iterationStep, numberOfPointClouds;
+        unsigned int numberOfPointClouds;
         std::string calibrationLocation;
         std::vector<std::string> listOfPointCloudnames;
         std::vector<std::string> listOfTFkinectNames;
         pcl::PointCloud<pcl::PointXYZRGBA> combinedPCL;
-        std::vector <tf::Transform> kinect2kinectTFTransform;
+        std::map <std::string, tf::Transform> kinect2kinectTFTransform;
         std::vector <pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> cachedPCL;
         void cachePCL(const sensor_msgs::PointCloud2 &pc);
     ;

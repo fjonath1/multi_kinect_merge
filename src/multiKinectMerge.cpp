@@ -8,12 +8,9 @@ multiKinectMerge::multiKinectMerge(const ros::NodeHandle &nh)
     
     this->nh.param("debug",debug,false);
     
-    iterationStep = 0;
-    pclReady.resize(listOfPointCloudnames.size());
     std::cerr << "Subscribe pcl\n";
     for (std::size_t i = 0; i < listOfPointCloudnames.size(); i++)
     {
-        pclReady[i]=false;
         std::cerr << listOfPointCloudnames.at(i) <<std::endl;
         pc_sub.push_back(
                         this->nh.subscribe(listOfPointCloudnames.at(i),1,&multiKinectMerge::cachePCL, this)
@@ -29,14 +26,14 @@ void multiKinectMerge::publishTFlinks()
 {
     for (std::size_t i = 1 ; i < listOfTFkinectNames.size(); i++) {
         static tf::TransformBroadcaster br;
-        br.sendTransform(tf::StampedTransform(kinect2kinectTFTransform[i-1], ros::Time::now(), listOfTFkinectNames[0], listOfTFkinectNames[i]));
+        br.sendTransform(tf::StampedTransform(kinect2kinectTFTransform[listOfTFkinectNames.at(i)], ros::Time::now(), listOfTFkinectNames[0], listOfTFkinectNames[i]));
     }
 }
 
 void multiKinectMerge::loadTransformParams()
 {
     okStatus = true;
-    kinect2kinectTFTransform.resize(listOfPointCloudnames.size() - 1);
+    kinect2kinectTFTransform[listOfPointCloudnames.at(0)].setIdentity();
     for (std::size_t i = 0; i < listOfPointCloudnames.size() - 1; i++)
     {
         std::stringstream ss;
@@ -46,14 +43,15 @@ void multiKinectMerge::loadTransformParams()
             Eigen::Transform<double,3,Eigen::Affine> kinect2kinectTransform = getTransformFromParam<double>(nh,ss.str());
             tf::Transform transform;
             tf::transformEigenToTF(kinect2kinectTransform,transform);
-            kinect2kinectTFTransform[i]=transform;
             
             if (i == 0) {
                 std::string tmp; nh.getParam(ss.str()+"/source_frame",tmp);
                 listOfTFkinectNames.push_back(tmp);
             }
-            std::string tmp; nh.getParam(ss.str()+"/destination_frame",tmp);
+            std::string tmp;
+            nh.getParam(ss.str()+"/destination_frame",tmp);
             listOfTFkinectNames.push_back(tmp);
+            kinect2kinectTFTransform[tmp]=transform;
             std::cerr << "Kinect " << ss.str() << std::endl << kinect2kinectTransform.matrix() << std::endl;
         }
         else
@@ -69,25 +67,18 @@ void multiKinectMerge::loadTransformParams()
 void multiKinectMerge::cachePCL(const sensor_msgs::PointCloud2 &pc)
 {
     pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cache(new pcl::PointCloud<pcl::PointXYZRGBA>());
-    if (iterationStep > 0) {
-        sensor_msgs::PointCloud2 pc2;
-        pcl_ros::transformPointCloud(listOfTFkinectNames.at(0), kinect2kinectTFTransform[iterationStep-1], pc, pc2);
-        pcl::fromROSMsg(pc2,*cache);
-    }
-    else pcl::fromROSMsg(pc,*cache);
+    sensor_msgs::PointCloud2 pc2;
+    pcl_ros::transformPointCloud(listOfTFkinectNames.at(0), kinect2kinectTFTransform[pc.header.frame_id], pc, pc2);
+    pcl::fromROSMsg(pc2,*cache);
     cachedPCL.push_back(cache);
     
     if (debug) {
         std::cerr << "Adding point cloud to cache\n";
         std::stringstream ss;
-        ss << calibrationLocation << "pc" << iterationStep << ".pcd";
+        ss << calibrationLocation << "pc" << pc.header.frame_id << ".pcd";
         pcl::PCDWriter writer;
-        writer.write<pcl::PointXYZRGBA> (ss.str(), *cachedPCL[iterationStep], true);
+        writer.write<pcl::PointXYZRGBA> (ss.str(), *cachedPCL[cachedPCL.size() - 1], true);
     }
-    
-    pclReady[iterationStep]=true;
-    iterationStep++;
-    if (iterationStep == numberOfPointClouds) iterationStep = 0;
 }
 
 bool multiKinectMerge::combinePCL()
@@ -95,18 +86,15 @@ bool multiKinectMerge::combinePCL()
     pcl::PCDWriter writer;
     if (!okStatus) return okStatus;
     
-    for (std::size_t i = 0; i < pclReady.size(); i++)
+    for (std::size_t i = 0; i < cachedPCL.size(); i++)
     {
         if (debug)
             std::cerr << "Combining point cloud" << i <<"\n";
         
-        if (pclReady[i]) {
-            if (i == 0)
-                combinedPCL = *cachedPCL[0];
-            else
-                combinedPCL += *cachedPCL[i];
-        }
-        pclReady[i] = false;
+        if (i == 0)
+            combinedPCL = *cachedPCL[0];
+        else
+            combinedPCL += *cachedPCL[i];
     }
     
     if (cachedPCL.size() > 0)
@@ -116,6 +104,7 @@ bool multiKinectMerge::combinePCL()
             std::cerr << "Publishing point cloud...\n";
             writer.write<pcl::PointXYZRGBA> (calibrationLocation+"finalCloud.pcd", combinedPCL, true);
         }
+        
         sensor_msgs::PointCloud2 output_msg;
         toROSMsg(combinedPCL,output_msg);
         output_msg.header.frame_id = listOfTFkinectNames[0];
